@@ -108,8 +108,12 @@ select{appearance:none;-webkit-appearance:none;background:var(--panel);color:var
 .tbl th:first-child{text-align:left}
 .tbl td{padding:10px 0;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums}
 .tbl td:first-child{text-align:left;color:var(--ink);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tbl th+th,.tbl td+td{padding-left:14px}
+.tbl th,.tbl td{white-space:nowrap}
 .tbl tr:last-child td{border-bottom:0}
 .tbl .big{font-weight:600;color:var(--ink)}
+/* широкие таблицы: горизонтальный скролл вместо сжатия */
+#tbl-channels,#tbl-managers{overflow-x:auto;-webkit-overflow-scrolling:touch}
 .forecast{display:flex;flex-direction:column;gap:2px}
 .forecast .fv{font-size:34px;font-weight:700;letter-spacing:-.02em}
 .forecast .fs{color:var(--sub);font-size:13px}
@@ -143,6 +147,9 @@ footer{margin-top:50px;color:var(--sub);font-size:12px;text-align:center;line-he
   .btn-reset{grid-column:1 / -1;margin-left:0;width:100%;padding:12px}
   .card{padding:18px}
   .sec-title{margin:26px 2px 10px}
+  /* держим числовые колонки читаемыми и даём скролл, а не сжатие */
+  #tbl-channels .tbl,#tbl-managers .tbl{min-width:460px}
+  .tbl td:first-child{max-width:130px}
 }
 @media(max-width:560px){.kpis{grid-template-columns:repeat(2,1fr)}.brow{grid-template-columns:96px 1fr auto}
   .kpi .k-v{font-size:23px}.hero h1{font-size:24px}}
