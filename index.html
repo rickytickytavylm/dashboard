@@ -291,9 +291,9 @@ body.locked{overflow:hidden}
 
   <div class="kpis" id="kpis"></div>
 
-  <div class="grid g-2">
-    <div class="card"><h3 id="h-mon">Динамика</h3><p class="cap" id="cap-mon"></p><div id="chart-mon"></div></div>
-    <div class="card"><h3>Структура сделок</h3><p class="cap">Успех / в работе / слив</p><div id="chart-status"></div><div class="legend" id="leg-status"></div></div>
+  <div class="grid g-2" id="grid-mon-status">
+    <div class="card" id="card-mon"><h3 id="h-mon">Динамика</h3><p class="cap" id="cap-mon"></p><div id="chart-mon"></div></div>
+    <div class="card" id="card-status"><h3>Структура сделок</h3><p class="cap">Успех / в работе / слив</p><div id="chart-status"></div><div class="legend" id="leg-status"></div></div>
   </div>
 
   <div class="grid g-2b">
@@ -404,10 +404,13 @@ const DATA = {"generated": "2026-08-03T10:55:33.248921+00:00", "account": "ninas
   const periodSelects=document.getElementById('period-selects');
   const presetEl=document.getElementById('preset');
   if(singleMonth){
-    if(periodFixed){ periodFixed.hidden=false; periodFixed.textContent=window.dashPeriodLabel; }
+    // Один месяц: период уже в шапке/hero — селекты, пресеты и дубли-плашки не нужны.
+    const fldPeriod=document.getElementById('fld-period'); if(fldPeriod) fldPeriod.style.display='none';
+    if(periodFixed) periodFixed.hidden=true;
     if(periodSelects) periodSelects.style.display='none';
     if(presetEl) presetEl.hidden=true;
-    const hm=document.getElementById('h-mon'); if(hm) hm.textContent='Итог за период';
+    const cardMon=document.getElementById('card-mon'); if(cardMon) cardMon.hidden=true;
+    const gridMS=document.getElementById('grid-mon-status'); if(gridMS) gridMS.className='grid g-1';
   } else {
     if(periodFixed) periodFixed.hidden=true;
     if(periodSelects) periodSelects.style.display='flex';
@@ -457,13 +460,11 @@ const DATA = {"generated": "2026-08-03T10:55:33.248921+00:00", "account": "ninas
   }
   tabsEl.querySelectorAll('button').forEach(b=>b.onclick=()=>showTab(b.dataset.t));
 
-  // ---- мини-фильтры периода у блоков ----
+  // ---- мини-фильтры периода у блоков (только если месяцев несколько) ----
   const subBars=[];
   function buildPeriodBar(id){ const el=document.getElementById(id); if(!el) return;
-    if(singleMonth){
-      el.innerHTML=`<span class="sf-lb">Период</span><span class="period-fixed" style="padding:6px 12px;font-size:13px">${window.dashPeriodLabel}</span>`;
-      return;
-    }
+    if(singleMonth){ el.hidden=true; el.innerHTML=''; return; }
+    el.hidden=false;
     el.innerHTML=`<span class="sf-lb">Период</span>
       <select class="sf-a">${moOpts}</select><span style="color:var(--sub)">—</span><select class="sf-b">${moOpts}</select>
       <div class="seg sf-p">${[['3','3м'],['6','6м'],['12','12м'],['0','Всё']].map(p=>`<button data-p="${p[0]}">${p[1]}</button>`).join('')}</div>`;
@@ -517,9 +518,10 @@ const DATA = {"generated": "2026-08-03T10:55:33.248921+00:00", "account": "ninas
     const m0=f.m0, m1=f.m1, mc=[];
     for(let i=m0;i<=m1;i++) mc.push({m:D.months[i], all:0, won:0, rev:0});
     L.forEach(l=>{ const j=l.m-m0; if(j>=0&&j<mc.length){ mc[j].all++; if(l.s===1){mc[j].won++; mc[j].rev+=l.pr;} }});
-    document.getElementById('cap-mon').textContent =
+    const capMon=document.getElementById('cap-mon');
+    if(capMon) capMon.textContent =
       rangeLabel(D.months[m0], D.months[m1])+' · '+fi(L.length)+' сделок';
-    drawMonthly(mc);
+    if(!singleMonth) drawMonthly(mc);
 
     // status donut
     drawDonut([['Успех',won.length,C.won],['В работе',open.length,C.open],['Слив',lost.length,C.lost]], L.length);
@@ -921,14 +923,18 @@ const DATA = {"generated": "2026-08-03T10:55:33.248921+00:00", "account": "ninas
         <b style="white-space:nowrap">${fi(r[1].n)} · ${fmS(r[1].rev)} \u20bd</b></div>
       <span class="track"><i style="width:${r[1].n/recMax*100}%;background:${r[2]}"></i></span></div>`).join('')+'</div>';
 
+    const monBlock = singleMonth ? '' : `<div class="grid g-2b">
+        <div class="card"><h3>Выручка GetCourse по месяцам</h3><p class="cap">Оплаты в выбранном периоде</p>${monHtml}</div>
+        <div class="card"><h3>Источники трафика (UTM)</h3><p class="cap">Откуда приходят оплаты · по выручке</p>${srcHtml}</div>
+      </div>`;
+    const srcBlock = singleMonth ? `<div class="grid g-1">
+        <div class="card"><h3>Источники трафика (UTM)</h3><p class="cap">Откуда приходят оплаты · по выручке · ${window.dashPeriodLabel}</p>${srcHtml}</div>
+      </div>` : '';
     el.innerHTML=`
       <div class="insc" style="margin-bottom:18px"><div class="ic" style="background:#fff4e5;color:var(--orange)">!</div>
         <div><h4>Почему «не бьётся» amoCRM и GetCourse</h4><p>В выгрузке GetCourse <b>${fi(G.total_orders)}</b> заказов, из них <b>${fi(G.completed)}</b> в статусе «Завершён» — но «Завершён» ≠ оплата. Реально <b>оплачено ${fi(G.paid_orders)}</b>. Ниже — только <b>оплаты</b>, сверка с amoCRM по телефону. Период: <b>${window.dashPeriodLabel}</b>.</p></div></div>
       ${kpiHtml}
-      <div class="grid g-2b">
-        <div class="card"><h3>${singleMonth?'Выручка GetCourse за период':'Выручка GetCourse по месяцам'}</h3><p class="cap">${singleMonth?window.dashPeriodLabel:'Оплаты в выбранном периоде'}</p>${monHtml}</div>
-        <div class="card"><h3>Источники трафика (UTM)</h3><p class="cap">Откуда приходят оплаты · по выручке</p>${srcHtml}</div>
-      </div>
+      ${monBlock}${srcBlock}
       <div class="grid g-2b">
         <div class="card"><h3>Топ продуктов / лендингов</h3><p class="cap">По оплаченной выручке (индекс расширен — «Прочее» почти обнулено)</p>${prodTbl}</div>
         <div class="card"><h3>Категории продуктов</h3><p class="cap">Раскладка «Прочего» по смыслу: видеокурсы, клубы, консультации и т.д.</p>${catHtml}</div>
@@ -953,257 +959,7 @@ const DATA = {"generated": "2026-08-03T10:55:33.248921+00:00", "account": "ninas
 })();
 </script>
 
-<script>
-/* ---- BotHelp + LiveDune ---- */
-(function(){
-  const S = (typeof DATA!=='undefined' && DATA.social) || null;
-  if(!S) return;
-  const fi = n => (Math.round(n)||0).toLocaleString('ru-RU');
-  const fmS = n => { n=+n||0; const s=n<0?'-':''; n=Math.abs(n);
-    if(n>=1e6) return s+(n/1e6).toFixed(2).replace('.',',')+' млн';
-    if(n>=1e4) return s+(n/1e3).toFixed(1).replace('.',',')+' тыс.'; return s+fi(n); };
-  const esc = s => (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
-  function bars(rows, colorFn, fmtFn){
-    if(!rows.length) return '<p class="cap">Нет данных</p>';
-    const mx=Math.max(1,...rows.map(r=>Math.abs(r.n)));
-    return '<div class="blist">'+rows.map((r,i)=>{
-      const c=colorFn?colorFn(r.n,i):'#0071e3', v=fmtFn?fmtFn(r.n):fi(r.n);
-      return `<div class="brow"><span class="nm" title="${esc(r.name)}">${esc(r.name)}</span>
-        <span class="track"><i style="width:${Math.abs(r.n)/mx*100}%;background:${c}"></i></span>
-        <span class="vl">${v}</span></div>`;}).join('')+'</div>';
-  }
-  function donut(items){
-    const tot=items.reduce((a,i)=>a+i.n,0)||1; let a=-Math.PI/2; const R=70,r=46,cx=80,cy=80; let p='';
-    items.forEach(it=>{ const f=it.n/tot,a2=a+f*2*Math.PI;
-      if(it.n>0){const x1=cx+R*Math.cos(a),y1=cy+R*Math.sin(a),x2=cx+R*Math.cos(a2),y2=cy+R*Math.sin(a2);
-        const xi2=cx+r*Math.cos(a2),yi2=cy+r*Math.sin(a2),xi1=cx+r*Math.cos(a),yi1=cy+r*Math.sin(a);const big=f>.5?1:0;
-        p+=`<path d="M${x1} ${y1} A${R} ${R} 0 ${big} 1 ${x2} ${y2} L${xi2} ${yi2} A${r} ${r} 0 ${big} 0 ${xi1} ${yi1} Z" fill="${it.color}"/>`;}
-      a=a2;});
-    const svg=`<svg viewBox="0 0 160 160" style="max-width:170px;margin:0 auto">${p}<text x="80" y="86" text-anchor="middle" font-size="20" font-weight="700" fill="var(--ink)">${fmS(tot)}</text></svg>`;
-    const leg='<div class="legend">'+items.map(i=>`<div class="lg"><span class="dot" style="background:${i.color}"></span>${esc(i.name)}<span class="lv">${fi(i.n)} · ${(i.n/tot*100).toFixed(0)}%</span></div>`).join('')+'</div>';
-    return svg+leg;
-  }
-  function growth(rows){
-    if(!rows||!rows.length) return '';
-    const W=720,H=200,pad=30,n=rows.length,gap=(W-pad*2)/n;
-    const maxCum=Math.max(1,...rows.map(r=>r.cum)),maxNew=Math.max(1,...rows.map(r=>r.new));
-    let bar='',pts=[],lbl='';
-    rows.forEach((r,i)=>{const x=pad+gap*i+gap*0.2,bw=gap*0.6,bh=(r.new/maxNew)*(H-pad*2);
-      bar+=`<rect x="${x.toFixed(1)}" y="${(H-pad-bh).toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="3" fill="#c7e0fb"/>`;
-      const cx=pad+gap*i+gap*0.5,cy=H-pad-(r.cum/maxCum)*(H-pad*2);pts.push([cx,cy]);
-      if(i%Math.ceil(n/6)===0||i===n-1){
-        const ml=(typeof window.dashMonLabel==='function')?window.dashMonLabel(r.m):(r.m||'');
-        lbl+=`<text x="${cx.toFixed(1)}" y="${H-10}" font-size="10" fill="var(--sub)" text-anchor="middle">${ml}</text>`;
-      }});
-    const line=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
-    const dots=pts.map(p=>`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="2.6" fill="#0071e3"/>`).join('');
-    return `<svg viewBox="0 0 ${W} ${H}">${bar}<path d="${line}" fill="none" stroke="#0071e3" stroke-width="2.2"/>${dots}${lbl}
-      <text x="${pad}" y="16" font-size="11" fill="var(--sub)">всего: ${fi(rows[rows.length-1].cum)}</text></svg>`;
-  }
-  function spark(vals,col){
-    if(!vals||vals.length<2) return '';
-    const mn=Math.min(...vals),mx=Math.max(...vals),rng=(mx-mn)||1,W=100,H=32;
-    const pts=vals.map((v,i)=>[i/(vals.length-1)*W, H-((v-mn)/rng)*(H-4)-2]);
-    const d=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
-    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="height:34px;margin-top:8px"><path d="${d} L${W} ${H} L0 ${H} Z" fill="${col}22"/><path d="${d}" fill="none" stroke="${col}" stroke-width="1.6"/></svg>`;
-  }
-
-  // --- сквозная история: воронка + KPI ---
-  const cols=['#0071e3','#30b0c7','#ff9500','#34c759'];
-  let story='<div class="sec-title">Сквозная история · маркетинг → продажи</div><div class="funnel">';
-  S.funnel.forEach((f,i)=>{ story+=`<div class="fstep"><div class="ring" style="background:${cols[i%cols.length]}">${i+1}</div>`+
-    (f.conv!=null?`<div class="conv">конв. ${f.conv}%</div>`:'')+
-    `<div class="fv">${fmS(f.value)}</div><div class="fl">${esc(f.label)}</div><div class="fs">${esc(f.sub)}</div></div>`;});
-  story+='</div>';
-  const ov=[['Выручка (успешные)', fmS(S.revenue)+' \u20bd','good']];
-  if(S.bh) ov.push(['Подписчики ботов', fmS(S.bh.active),'']);
-  if(S.ld){ ov.push(['Своя аудитория', fmS(S.ld.own.followers),'accent']);
-            ov.push(['Рынок / конкуренты', fmS(S.ld.comp.followers),'']); }
-  story+='<div class="kpis">'+ov.map(k=>`<div class="kpi ${k[2]}"><div class="k-t">${k[0]}</div><div class="k-v">${k[1]}</div></div>`).join('')+'</div>';
-  document.getElementById('story').innerHTML=story;
-
-  // --- BotHelp + LiveDune разделы ---
-  let html='';
-  if(S.bh){ const b=S.bh;
-    html+='<div class="sec-title">BotHelp · подписчики и каналы</div>';
-    html+='<div class="kpis">'+[
-      ['Всего',fi(b.total)],['Активны',b.active_pct+'%'],['С телефоном',fi(b.phone)],
-      ['Каналов',fi(b.channels)],['Ботов',fi(b.bots)],['Воронок',fi(b.funnels)]
-    ].map(k=>`<div class="kpi"><div class="k-t">${k[0]}</div><div class="k-v">${k[1]}</div></div>`).join('')+'</div>';
-    html+=`<div class="grid"><div class="card"><h3>Рост базы по месяцам</h3><p class="cap">Накопительно (линия) + новые за месяц (столбцы)</p>${growth(b.growth)}</div></div>`;
-    html+='<div class="grid g-2b">'+
-      `<div class="card"><h3>Каналы</h3><p class="cap">Топ по числу подписчиков</p>${bars(b.by_channel,()=>'#30b0c7')}</div>`+
-      `<div class="card"><h3>Тип канала</h3><p class="cap">Мессенджеры базы</p>${donut(b.by_type)}</div>`+'</div>';
-    html+=`<div class="grid"><div class="card"><h3>Источник привлечения</h3><p class="cap">utm_source · без метки: ${fi(b.not_spec)} (${b.not_spec_pct}%) — зона для UTM-разметки</p>${donut(b.sources)}</div></div>`;
-  }
-  if(S.ld){ const o=S.ld.own, c=S.ld.comp;
-    html+=`<div class="sec-title">LiveDune · наши соцсети — ${esc(o.project)}</div>`;
-    html+=`<p class="cap" style="margin:-6px 4px 14px">${o.count} аккаунтов · ${fi(o.followers)} подписчиков · +${fi(o.g30)} за 30 дней. Спарклайн — динамика подписчиков.</p>`;
-    html+='<div class="accs">'+o.accounts.map(a=>{
-      const cls=a.g30>0?'gu':(a.g30<0?'gd':'gf'),sign=a.g30>0?'+':'',col=a.g30>0?'#34c759':(a.g30<0?'#ff3b30':'#8e8e93');
-      return `<div class="acc"><div class="ah"><div><div class="an">${esc(a.name)}</div><div class="at">${esc(a.type)}</div></div>${a.url?`<a href="${esc(a.url)}" target="_blank" rel="noopener">↗</a>`:''}</div>
-        <div class="af">${fi(a.followers)}</div>
-        <div class="at"><span class="${cls}">${sign}${fi(a.g30)}</span> за 30 дн · ER ${a.er}%</div>${spark(a.spark,col)}</div>`;}).join('')+'</div>';
-    html+='<div class="sec-title">Рынок · конкуренты (отдельная плашка)</div>';
-    html+=`<p class="cap" style="margin:-6px 4px 14px">${c.count} аккаунтов под наблюдением · ${fi(c.followers)} подписчиков суммарно.</p>`;
-    html+='<div class="grid g-2b">'+
-      `<div class="card"><h3>Топ по подписчикам</h3><p class="cap">Крупнейшие игроки рынка</p>${bars(c.top.map(x=>({name:x.name,n:x.followers})),()=>'#ff3b30',fmS)}</div>`+
-      `<div class="card"><h3>Кто быстрее растёт</h3><p class="cap">Прирост подписчиков за 30 дней</p>${bars(c.movers.map(x=>({name:x.name,n:x.g30})),v=>v>=0?'#34c759':'#ff3b30',v=>(v>0?'+':'')+fi(v))}</div>`+'</div>';
-    html+=`<div class="grid"><div class="card"><h3>Соцсети рынка</h3><p class="cap">Распределение отслеживаемых аккаунтов по площадкам</p>${donut(S.ld.networks)}</div></div>`;
-  }
-  document.getElementById('social').innerHTML=html;
-})();
-</script>
-
-<script>
-/* ---- Telegram-канал: контент и вовлечённость ---- */
-(function(){
-  const T = (typeof DATA!=='undefined' && DATA.telegram) || null;
-  const el = document.getElementById('tg'); if(!T || !el) return;
-  const fi = n => (Math.round(n)||0).toLocaleString('ru-RU');
-  const esc = s => (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-  const monL = s => (typeof window.dashMonLabel==='function') ? window.dashMonLabel(s) : (s||'—');
-  const PAL=['#0071e3','#34c759','#ff9500','#af52de','#30b0c7','#ff2d55','#5856d6','#ffcc00','#00c7be','#ff3b30','#8e8e93','#64d2ff'];
-
-  // rows: [{label, w (доля бара 0..max), vl (правая подпись), color}]
-  function bars(rows){
-    if(!rows.length) return '<p class="cap">Нет данных</p>';
-    const mx=Math.max(1,...rows.map(r=>r.w));
-    return '<div class="blist">'+rows.map((r,i)=>`<div class="brow"><span class="nm" title="${esc(r.label)}">${esc(r.label)}</span>
-      <span class="track"><i style="width:${r.w/mx*100}%;background:${r.color||PAL[i%PAL.length]}"></i></span>
-      <span class="vl">${r.vl}</span></div>`).join('')+'</div>';
-  }
-
-  const d=T.derived;
-  const WD=T.wd_labels, TP=T.tp_ru, P=T.posts;  // posts: [ym,type,h,wd,len,react,links,tags[],text]
-  const mean = xs => xs.length? Math.round(xs.reduce((a,b)=>a+b,0)/xs.length*10)/10 : 0;
-
-  // --- аудит (от меня): находки / векторы / проблемы. По всему периоду, тексты адаптивны к данным ---
-  const vidVsText = d.text_avg?(d.video_avg/d.text_avg).toFixed(1):'—';
-  const shortWins = d.short_avg >= d.long_avg;
-  const lenRatio = shortWins ? (d.long_avg?(d.short_avg/d.long_avg).toFixed(1):'—')
-                             : (d.short_avg?(d.long_avg/d.short_avg).toFixed(1):'—');
-  const eveningBetter = d.evening.avg > d.morning.avg;
-  const bh = d.best_hour;
-
-  const works=[
-    ['#eafaef','var(--green)','🎬','Видео — сильнейший формат',
-      `Видео собирает <b>${d.video_avg}❤</b>/пост против <b>${d.text_avg}❤</b> у голого текста (<b>×${vidVsText}</b>). Кружки и короткие ролики эксперта стоит ставить в приоритет.`],
-    shortWins
-      ? ['#eafaef','var(--green)','⚡','Короткие цепляющие посты',
-         `Короткие посты (<300 знаков) дают <b>${d.short_avg}❤</b> — выше лонгридов (<b>${d.long_avg}❤</b>, ×${lenRatio}). Одностроки, «❤ если согласны», мемы-провокации отлично собирают отклик.`]
-      : ['#eafaef','var(--green)','📝','Лонгриды-разборы выигрывают',
-         `Посты 2000+ знаков дают <b>${d.long_avg}❤</b> против <b>${d.short_avg}❤</b> у коротких (×${lenRatio}). Аудитория пришла читать глубокие разборы.`],
-    ['#eafaef','var(--green)','📈','Канал вырос по вовлечённости',
-      `Средние реакции выросли с <b>~${d.early_avg}❤</b> (первая половина периода) до <b>~${d.late_avg}❤</b> (вторая). Медиана <b>${T.med_react}</b>, лишь <b>${T.zero_pct}%</b> постов без реакций — здоровая живая аудитория.`],
-    ['#eafaef','var(--green)','⭐','Личный бренд Шурова работает',
-      `Топ-посты — это личность эксперта и вирусные истории (день рождения В.А. Шурова, реальные кейсы, «минутка психиатрии», праздники). Лицо бренда — сильнейший актив, его стоит показывать чаще.`],
-  ];
-  const vectors=[
-    eveningBetter
-      ? ['#eef4ff','var(--blue)','🌆','Усилить вечерний слот',
-         `Вечер 18–23ч уже даёт <b>${d.evening.avg}❤</b> против <b>${d.morning.avg}❤</b> утром (7–11ч)${bh?`, пик — около <b>${(bh.h<10?'0':'')+bh.h}:00</b>`:''}. Стоит переносить сильные посты на вечер — там отклик выше.`]
-      : ['#eef4ff','var(--blue)','🕗','Протестировать вечерний слот',
-         `Утро 7–11ч: <b>${d.morning.avg}❤</b> (${d.morning.n} постов), вечер 18–23ч: <b>${d.evening.avg}❤</b> (${d.evening.n})${bh?`. Лучший слот по данным — около <b>${(bh.h<10?'0':'')+bh.h}:00</b>`:''}. Для эмоциональной ниши вечер обычно сильнее — есть смысл протестировать.`],
-    ['#eef4ff','var(--blue)','#️⃣','Довести рубрикатор до конца',
-      `Хэштеги уже у <b>${T.with_tags_pct}%</b> постов, ядро сильное (#психология — ${T.tags_top[0]?T.tags_top[0][1]:0}, #зависимость — ${T.tags_top[1]?T.tags_top[1][1]:0}). Свести к 6–8 постоянным рубрикам (#тест #разбор #видео #кейс #притча) и закрепить в шапке — для навигации и переходов.`],
-    ['#eef4ff','var(--blue)','🔗','Добавить UTM в ссылки',
-      `Ссылки уже в <b>${T.with_links_pct}%</b> постов — отлично, но без UTM выручку с канала не атрибутировать. Разметка (utm_source=telegram) → канал появится в сверке GetCourse как источник продаж.`],
-    ['#eef4ff','var(--blue)','🔁','Масштабировать победителей',
-      `Форматы «❤ если согласны», «минутка психиатрии», реальные истории и разборы состояний дают всплески. Превратить в постоянные рубрики и переупаковывать топ в Reels/Shorts для внешнего трафика.`],
-  ];
-  const probs=[
-    ['#fff4e5','var(--orange)','📊','Не измеряются охваты',
-      `В экспорте нет просмотров — вовлечённость только по реакциям. Без ERR/охвата не видно, растёт ли реальный reach или только реакции. Нужен TGStat/LiveDune или бот для суточных просмотров.`],
-    ['#fff4e5','var(--orange)','🗳️','Опросы недорабатывают',
-      `Опросы дают лишь <b>${d.poll_avg}❤</b> — ниже других форматов. Их сила в комментариях/кликах, а не реакциях; стоит связывать опрос с последующим разбором и CTA.`],
-    ['#fff4e5','var(--orange)','🎯','Призыв к действию слабый',
-      `Контент сильный, но переход «прочитал → записался/купил» почти не оформлен. В постах-тестах и разборах логично добавлять мягкий CTA на консультацию/курс с UTM-ссылкой.`],
-    ['#fff4e5','var(--orange)','📢','Наследие операционного шума',
-      `В начале (2024) часть постов — анонсы и «правила чата» с 0 реакций. Сейчас доля упала до <b>${T.zero_pct}%</b>, но такие сообщения лучше держать в закрепе/чате, а не в ленте.`],
-  ];
-  const insc=arr=>arr.map(c=>`<div class="insc"><div class="ic" style="background:${c[0]};color:${c[1]}">${c[2]}</div><div><h4>${c[3]}</h4><p>${c[4]}</p></div></div>`).join('');
-  const auditHtml=`
-    <div class="sec-title">Аудит и рекомендации <span style="text-transform:none;letter-spacing:0;font-weight:400">(весь период · разбор + практики рынка)</span></div>
-    <div class="cap" style="margin:-6px 4px 12px;font-weight:600;color:var(--green)">Что уже работает</div>
-    <div class="ins">${insc(works)}</div>
-    <div class="cap" style="margin:14px 4px 12px;font-weight:600;color:var(--blue)">Векторы роста</div>
-    <div class="ins">${insc(vectors)}</div>
-    <div class="cap" style="margin:14px 4px 12px;font-weight:600;color:var(--orange)">Проблемы и что чинить</div>
-    <div class="ins">${insc(probs)}</div>`;
-
-  // Реактивно по периоду: lo/hi — строки 'YYYY-MM' (границы из общего фильтра).
-  window.renderTelegram=function(lo,hi){
-    const posts=P.filter(p=>(!lo||p[0]>=lo)&&(!hi||p[0]<=hi));
-    const n=posts.length;
-    const intro=`<div class="insc" style="margin-bottom:18px"><div class="ic" style="background:#e8f0fe;color:var(--blue)">✈</div>
-      <div><h4>Онлайн-школа доктора Шурова</h4><p>Метрики ниже — за <b>выбранный период</b>. В экспорте Telegram <b>нет счётчика просмотров</b>, поэтому вовлечённость меряется по <b>реакциям</b>. Аудит внизу — по всему периоду канала.</p></div></div>`;
-    if(!n){ el.innerHTML=intro+`<div class="card"><p class="cap">В выбранном периоде постов нет.</p></div>`+auditHtml; return; }
-    const reacts=posts.map(p=>p[5]), total=reacts.reduce((a,b)=>a+b,0);
-    const sorted=reacts.slice().sort((a,b)=>a-b), med=sorted[Math.floor(n/2)], zero=reacts.filter(r=>r===0).length;
-    const gp=(idx)=>{ const m={}; posts.forEach(p=>{(m[p[idx]]=m[p[idx]]||[]).push(p[5]);}); return m; };
-    // месяцы
-    const mm=gp(0), mk=Object.keys(mm).sort();
-    const monRows=mk.map(k=>({label:monL(k), w:mm[k].length, vl:fi(mm[k].length)+' · '+mean(mm[k])+'❤', color:'#0071e3'}));
-    const ppm=Math.round(n/mk.length*10)/10;
-    // типы
-    const tm=gp(1);
-    const typeRows=Object.keys(tm).map(k=>({l:TP[k]||k,a:mean(tm[k]),c:tm[k].length})).sort((x,y)=>y.a-x.a)
-      .map((t,i)=>({label:t.l, w:t.a, vl:t.a+'❤ · '+fi(t.c), color:PAL[i%PAL.length]}));
-    // часы
-    const hm=gp(2), hth=n>200?5:2;
-    const hourRows=Object.keys(hm).map(Number).sort((a,b)=>a-b).filter(h=>hm[h].length>=hth)
-      .map(h=>({label:(h<10?'0':'')+h+':00', w:mean(hm[h]), vl:mean(hm[h])+'❤ · '+fi(hm[h].length), color:(bh&&h===bh.h)?'#34c759':'#30b0c7'}));
-    // дни недели
-    const wm=gp(3);
-    const wdRows=WD.map((lb,i)=>({label:lb, w:mean(wm[i]||[]), vl:mean(wm[i]||[])+'❤ · '+fi((wm[i]||[]).length), color:'#af52de'}));
-    // длина
-    const LN=['Медиа без текста','Короткие (<300)','300–700','700–1200','1200–2000','Лонгриды (2000+)'];
-    const lbk=L=>L===0?0:L<300?1:L<700?2:L<1200?3:L<2000?4:5;
-    const lm={}; posts.forEach(p=>{const b=lbk(p[4]);(lm[b]=lm[b]||[]).push(p[5]);});
-    const lenRows=Object.keys(lm).map(Number).sort((a,b)=>a-b).map(b=>({label:LN[b], w:mean(lm[b]), vl:mean(lm[b])+'❤ · '+fi(lm[b].length), color:'#ff9500'}));
-    // теги/ссылки
-    const gm={}; let wt=0,wl=0;
-    posts.forEach(p=>{ if(p[7]&&p[7].length){wt++;p[7].forEach(t=>{const k=String(t).toLowerCase();gm[k]=(gm[k]||0)+1;});} if(p[6])wl++; });
-    const tagRows=Object.entries(gm).sort((a,b)=>b[1]-a[1]).slice(0,14).map(([k,c])=>({label:'#'+k, w:c, vl:fi(c), color:'#5856d6'}));
-    // топ постов
-    const top=posts.slice().sort((a,b)=>b[5]-a[5]).slice(0,14);
-    const topTbl=`<table class="tbl"><tr><th>Месяц</th><th>Тип</th><th>Знаков</th><th>Реакций</th><th>Начало поста</th></tr>`+
-      top.map(p=>`<tr><td style="white-space:nowrap">${monL(p[0])}</td><td>${esc(TP[p[1]]||p[1])}</td><td>${fi(p[4])}</td>
-        <td class="big">${fi(p[5])}</td><td title="${esc(p[8])}" style="white-space:normal;max-width:340px">${esc(p[8])}</td></tr>`).join('')+`</table>`;
-    const emoHtml=bars(T.emoji_top.map(([e,c],i)=>({label:e, w:c, vl:fi(c), color:PAL[i%PAL.length]})));
-    const kpi=[
-      ['Постов', fi(n), 'в периоде','accent'],
-      ['Период', monL(mk[0])+' – '+monL(mk[mk.length-1]), mk.length+' мес'],
-      ['Постов в месяц', ppm, '~'+(ppm/30.4).toFixed(1)+' в день'],
-      ['Реакций', fi(total), 'просмотров в экспорте нет'],
-      ['Сред. реакций', mean(reacts), 'медиана '+med],
-      ['Без реакций', Math.round(zero/n*100)+'%', 'постов «в пустоту»'],
-    ];
-    const kpiHtml='<div class="kpis" style="margin-bottom:18px">'+kpi.map(k=>`<div class="kpi ${k[3]||''}"><div class="k-t">${k[0]}</div><div class="k-v">${k[1]}</div><div class="k-s">${k[2]}</div></div>`).join('')+'</div>';
-    el.innerHTML=intro+kpiHtml+`
-      <div class="grid g-2b">
-        <div class="card"><h3>Публикации по месяцам</h3><p class="cap">Столбец — число постов · подпись — сред. реакций</p>${bars(monRows)}</div>
-        <div class="card"><h3>Вовлечённость по типу</h3><p class="cap">Ширина — сред. реакций на пост</p>${bars(typeRows)}</div>
-      </div>
-      <div class="grid g-2b">
-        <div class="card"><h3>Лучшее время (по часам)</h3><p class="cap">Сред. реакций · зелёным — лучший слот (весь период)</p>${bars(hourRows)}</div>
-        <div class="card"><h3>По дням недели</h3><p class="cap">Сред. реакций · число постов</p>${bars(wdRows)}</div>
-      </div>
-      <div class="grid g-2b">
-        <div class="card"><h3>Длина текста → реакции</h3><p class="cap">Как объём влияет на отклик</p>${bars(lenRows)}</div>
-        <div class="card"><h3>Топ эмодзи-реакций</h3><p class="cap">Чем реагируют (весь период)</p>${emoHtml}</div>
-      </div>
-      <div class="grid g-2b">
-        <div class="card"><h3>Хэштеги / рубрики</h3><p class="cap">Покрытие: теги ${Math.round(wt/n*100)}% · ссылки ${Math.round(wl/n*100)}%</p>${bars(tagRows)}</div>
-        <div class="card"><h3>Топ постов по реакциям</h3><p class="cap">Что переупаковывать и масштабировать</p><div style="overflow-x:auto">${topTbl}</div></div>
-      </div>`+auditHtml;
-  };
-  // первичный рендер по всему периоду; далее общий render() вызывает по фильтру
-  window.renderTelegram(DATA.months[0], DATA.months[DATA.months.length-1]);
-})();
-</script>
 
 <script>
 /* ---- Кира: ИИ-ассистент, воронка диалогов ---- */
@@ -1374,11 +1130,12 @@ const DATA = {"generated": "2026-08-03T10:55:33.248921+00:00", "account": "ninas
     const avgMsg=depth.length?Math.round(depth.reduce((a,b)=>a+b,0)/depth.length):0;
     const medMsg=depth.length?depth[Math.floor(depth.length/2)]:0;
 
+    const monCard = oneMon ? '' : `<div class="card"><h3>Динамика по месяцам</h3><p class="cap">Сколько зашло и сколько передано куратору</p>${monHtml}</div>`;
     el.innerHTML=intro+kpiHtml+`
-      <div class="grid g-2b">
-        <div class="card"><h3>Воронка Киры</h3><p class="cap">От захода до оплаты · % от зашедших и конверсия шага</p>${funHtml}
+      <div class="grid ${oneMon?'g-1':'g-2b'}">
+        <div class="card"><h3>Воронка Киры</h3><p class="cap">От захода до оплаты · ${window.dashPeriodLabel||''} · % от зашедших и конверсия шага</p>${funHtml}
           <p class="cap" style="margin-top:12px">Глубина диалога: в среднем <b style="color:var(--ink)">${avgMsg}</b> сообщений (медиана ${medMsg}). Из написавших до куратора доходит <b style="color:var(--ink)">${pct(handed,engaged).toFixed(0)}%</b>.</p></div>
-        <div class="card"><h3>${oneMon?'Диалоги за период':'Динамика по месяцам'}</h3><p class="cap">Сколько зашло и сколько передано куратору</p>${monHtml}</div>
+        ${monCard}
       </div>
       <div class="grid g-2b">
         <div class="card"><h3>Источники диалогов</h3><p class="cap">Откуда приходят в бота · и как конвертят в передачу</p>${srcTbl}</div>
