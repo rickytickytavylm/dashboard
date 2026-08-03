@@ -346,10 +346,21 @@ const DATA = {"generated": "2026-08-03T10:55:33.248921+00:00", "account": "ninas
     palette:['#0071e3','#34c759','#ff9500','#af52de','#30b0c7','#ff2d55','#5856d6','#ffcc00','#00c7be','#ff3b30','#8e8e93','#64d2ff']};
   const tip = document.getElementById('tip');
   const MN = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
+  const MN_FULL = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
   const fi = n => (n||0).toLocaleString('ru-RU');
   const fm = n => fi(Math.round(n||0))+' \u20bd';
   const fmS = n => { n=n||0; if(n>=1e6) return (n/1e6).toFixed(n>=1e7?0:1)+' млн'; if(n>=1e3) return Math.round(n/1e3)+'K'; return fi(n); };
-  const monLabel = s => { const [y,m]=s.split('-'); return MN[+m-1]+' '+y.slice(2); };
+  // «июл 26» читалось как 26 июля — пишем явно 1.07–31.07.2026 (если есть period) или «июль 2026».
+  const monLabel = s => {
+    if(!s) return '—';
+    const [y,m]=s.split('-');
+    const pf=D.period&&D.period.from, pt=D.period.to;
+    if(pf && pt && pf.slice(0,7)===s && pt.slice(0,7)===s){
+      const d0=pf.slice(8,10), d1=pt.slice(8,10);
+      return d0+'.'+m+'.'+y+' — '+d1+'.'+m+'.'+y;
+    }
+    return MN_FULL[+m-1]+' '+y;
+  };
 
   // По умолчанию — последний месяц среза (не «вся история с первого месяца»).
   let f = {pipe:'all', user:'all', m0:Math.max(0,D.months.length-1), m1:D.months.length-1, mode:'all'};
@@ -361,9 +372,19 @@ const DATA = {"generated": "2026-08-03T10:55:33.248921+00:00", "account": "ninas
   selUser.innerHTML='<option value="all">Все менеджеры</option>'+D.users.map((n,i)=>`<option value="${i}">${n}</option>`).join('');
   const moOpts=D.months.map((m,i)=>`<option value="${i}">${monLabel(m)}</option>`).join('');
   selM0.innerHTML=moOpts; selM1.innerHTML=moOpts;
-  const per=(D.period&&D.period.from&&D.period.to)? (D.period.from+' → '+D.period.to) : (D.months||[]).join(', ');
-  document.getElementById('genpill').textContent='срез: '+per+(D.generated? ' · '+D.generated.slice(0,10):'');
-  document.getElementById('acc').textContent='июль · amo + GetCourse + Кира';
+  // Подписи фильтров: не «Период с/по», а явные даты среза.
+  const fldM0=selM0.closest('.fld'), fldM1=selM1.closest('.fld');
+  if(fldM0){ const lb=fldM0.querySelector('label'); if(lb) lb.textContent='Период'; }
+  if(fldM1){
+    if(D.months.length===1){ fldM1.style.display='none'; }
+    else { const lb=fldM1.querySelector('label'); if(lb) lb.textContent='по'; }
+  }
+  const perLabel = (D.period&&D.period.from&&D.period.to)
+    ? (D.period.from.slice(8,10)+'.'+D.period.from.slice(5,7)+'.'+D.period.from.slice(0,4)
+       +' — '+D.period.to.slice(8,10)+'.'+D.period.to.slice(5,7)+'.'+D.period.to.slice(0,4))
+    : monLabel((D.months||[])[0]||'');
+  document.getElementById('genpill').textContent='срез: '+perLabel+(D.generated? ' · '+D.generated.slice(0,10):'');
+  document.getElementById('acc').textContent='amo + GetCourse + Кира · '+perLabel;
 
   function activePreset(){ const last=D.months.length-1; if(f.m1!==last) return '';
     if(f.m0===0) return '0'; const span=f.m1-f.m0+1;
