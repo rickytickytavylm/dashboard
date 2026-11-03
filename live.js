@@ -30,66 +30,51 @@
     }).join("") + "</div>";
   }
 
-  function amoSlice() {
-    const D = window.DATA;
-    if (!D || !D.leads) return null;
-    let won = 0, wrev = 0, open = 0, orev = 0, lost = 0;
-    const pipes = {};
-    (D.leads || []).forEach((l) => {
-      if (l.s === 1) { won++; wrev += l.pr || 0; }
-      else if (l.s === 2) lost++;
-      else { open++; orev += l.pr || 0; }
-      const name = (D.pipelines || [])[l.p] || "—";
-      const b = pipes[name] || (pipes[name] = { n: 0, won: 0, rev: 0 });
-      b.n++;
-      if (l.s === 1) { b.won++; b.rev += l.pr || 0; }
-    });
-    const tags = {};
-    (D.leads || []).forEach((l) => {
-      (l.t || []).forEach((i) => {
-        const name = (D.tags || [])[i];
-        if (!name) return;
-        tags[name] = (tags[name] || 0) + 1;
-      });
-    });
-    const tagRows = Object.entries(tags).sort((a, b) => b[1] - a[1]).slice(0, 12)
-      .map(([name, n]) => ({ name, live: n }));
-    const pipeRows = Object.entries(pipes).sort((a, b) => b[1].rev - a[1].rev)
-      .map(([name, b]) => ({ name, n: b.n, won: b.won, rev: b.rev }));
-    return {
-      n: D.leads.length, won, wrev, open, orev, lost, tagRows, pipeRows,
-      from: D.period && D.period.from, to: D.period && D.period.to,
-    };
+  function kiraSales() {
+    const J = (window.DATA && window.DATA.journey) || null;
+    const base = (window.DATA && window.DATA.amo_october) || null;
+    if (!J || !J.sales) return { base };
+    return { base, sales: J.sales, live: J.live };
   }
 
   function paint() {
     const w = state.web && state.web.kpis;
     const t = state.tg;
-    const a = amoSlice();
-    const live = (w ? w.live || 0 : 0) + (t ? t.live || 0 : 0);
-    const phones = (w ? w.phones || 0 : 0) + (t ? t.phones || 0 : 0);
+    const pack = kiraSales();
+    const snap = pack.live || {};
+    const sales = pack.sales || {};
+    const base = pack.base;
+    const liveNow = (w ? w.live || 0 : 0) + (t ? t.live || 0 : 0);
+    const phonesNow = (w ? w.phones || 0 : 0) + (t ? t.phones || 0 : 0);
+    const octLive = snap.total || 0;
     $("home-kpis").innerHTML = [
-      ["Живые сегодня", fi(live), "ТГ " + fi(t && t.live) + " · сайт " + fi(w && w.live)],
-      ["Номера", fi(phones), live ? Math.round(1000 * phones / live) / 10 + "% живых" : "—"],
-      ["Успех amo", a ? fi(a.won) : "—", a ? fm(a.wrev) : "нет среза"],
-      ["В работе amo", a ? fi(a.open) : "—", a ? fm(a.orev) : ""],
+      ["Живые октября", fi(octLive), "ТГ " + fi(snap.tg && snap.tg.live) + " · сайт " + fi(snap.web && snap.web.live)],
+      ["Сегодня онлайн", (state.err.tg && state.err.web) ? "нет связи" : fi(liveNow), "ТГ " + (t ? fi(t.live) : "…") + " · сайт " + (w ? fi(w.live) : "…")],
+      ["Продажи Киры", fi(sales.n), fm(sales.sum) + " · из " + (base ? fi(base.won) : "—") + " успехов amo"],
+      ["Вся база amo", base ? fi(base.all) : "—", base ? "успех " + fi(base.won) + " · слив " + fi(base.lost) + " · в работе " + fi(base.open) : ""],
     ].map((x) => '<div class="kpi"><div class="k-t">' + x[0] + '</div><div class="k-v">' + x[1] + '</div><div class="k-s">' + x[2] + "</div></div>").join("");
 
+    const octTg = (snap.tg_families || []).map((r) => ({ name: r.name, live: r.live, phones: r.phones }));
+    const octWeb = (snap.web_families || []).map((r) => ({ name: r.name, live: r.live, phones: r.phones }));
     $("src-tg").innerHTML = t
-      ? "<p class=\"cap\">" + fi(t.live) + " живых · " + fi(t.phones) + " номеров · " + (t.phone_pct || 0) + "% · средний " + (t.avg || 0) + "</p>" + bars(t.tails, (r) => r.live)
-      : "<p class=\"cap\">" + (state.err.tg || "гружу Telegram…") + "</p>";
+      ? "<p class=\"cap\">сегодня " + fi(t.live) + " живых · " + fi(t.phones) + " номеров</p>" + bars(t.tails, (r) => r.live)
+      : "<p class=\"cap\">октябрь " + fi(snap.tg && snap.tg.live) + " живых. Онлайн: " + (state.err.tg || "гружу") + "</p>" + bars(octTg, (r) => r.live);
     const webTails = ((state.web && state.web.tails) || []).map((r) => ({ tail: r.tail, live: r.live, phones: r.phones }));
     $("src-web").innerHTML = w
-      ? "<p class=\"cap\">" + fi(w.live) + " живых · " + fi(w.phones) + " номеров · " + (w.phone_pct || 0) + "%</p>" + bars(webTails, (r) => r.live)
-      : "<p class=\"cap\">" + (state.err.web || "гружу сайт…") + "</p>";
-    $("src-amo").innerHTML = a
-      ? "<p class=\"cap\">" + (a.from || "") + " — " + (a.to || "") + " · " + fi(a.n) + " сделок · успех " + fi(a.won) + " · " + fm(a.wrev) + "</p>"
-        + bars(a.pipeRows.map((p) => ({ name: p.name, live: p.won })), (r) => r.live)
-      : "<p class=\"cap\">amo не вшит</p>";
-    $("home-tails").innerHTML = "<div class=\"grid g-2b\"><div><h3 style=\"margin:0 0 8px\">Хвосты Telegram</h3>"
-      + bars(t && t.tails, (r) => r.live) + "</div><div><h3 style=\"margin:0 0 8px\">Хвосты сайта</h3>"
-      + bars(webTails, (r) => r.live) + "</div></div>";
-    $("home-amo-tags").innerHTML = a ? bars(a.tagRows, (r) => r.live) : "";
+      ? "<p class=\"cap\">сегодня " + fi(w.live) + " живых · " + fi(w.phones) + " номеров</p>" + bars(webTails, (r) => r.live)
+      : "<p class=\"cap\">октябрь " + fi(snap.web && snap.web.live) + " живых. Онлайн: " + (state.err.web || "гружу") + "</p>" + bars(octWeb, (r) => r.live);
+    const types = (sales.types || []).map((r) => ({ name: r.name, live: r.n, phones: null, rub: r.sum }));
+    if ($("src-amo-cap")) $("src-amo-cap").textContent = sales.n
+      ? fi(sales.n) + " сделок · " + fm(sales.sum) + ". Это не все " + (base ? fi(base.all) : "") + " карточек amo и не все " + (base ? fi(base.won) : "") + " успехи."
+      : "";
+    $("src-amo").innerHTML = types.length
+      ? bars(types, (r) => r.live)
+      : "<p class=\"cap\">нет проверенных продаж Киры</p>";
+    const tgShow = (t && t.tails && t.tails.length) ? t.tails : octTg;
+    const webShow = webTails.length ? webTails : octWeb;
+    $("home-tails").innerHTML = "<div class=\"grid g-2b\"><div><h3 style=\"margin:0 0 8px\">" + (t ? "Telegram сегодня" : "Telegram октябрь") + "</h3>"
+      + bars(tgShow, (r) => r.live) + "</div><div><h3 style=\"margin:0 0 8px\">" + (w ? "Сайт сегодня" : "Сайт октябрь") + "</h3>"
+      + bars(webShow, (r) => r.live) + "</div></div>";
     const stamp = new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
     const bad = state.err.tg || state.err.web;
     pill((bad ? "часть не обновилась · " : "онлайн · ") + stamp, !!bad);
